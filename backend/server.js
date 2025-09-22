@@ -3,9 +3,19 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 require('dotenv').config();
+const http = require('http'); // Required for Socket.IO
+const { Server } = require("socket.io"); // Required for Socket.IO
 
 // --- Express App Initialization ---
 const app = express();
+const server = http.createServer(app); // Create an HTTP server from the Express app
+const io = new Server(server, { // Initialize Socket.IO
+    cors: {
+        origin: "http://localhost:5173", // Allow your frontend origin
+        methods: ["GET", "POST", "PUT"]
+    }
+});
+
 const PORT = process.env.PORT || 5000;
 
 // --- Middleware ---
@@ -23,18 +33,13 @@ mongoose.connect(mongoURI)
     .catch(err => console.error('MongoDB connection error:', err));
 
 
-// --- Mongoose Schemas (Data Models) ---
+// --- Mongoose Schemas ---
 const userSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true, lowercase: true },
     password: { type: String, required: true },
-    role: {
-        type: String,
-        required: true,
-        enum: ['donor', 'recipient', 'admin', 'analyst']
-    },
+    role: { type: String, required: true, enum: ['donor', 'recipient', 'admin', 'analyst'] },
     organizationName: { type: String, required: true }
 }, { timestamps: true });
-
 const User = mongoose.model('User', userSchema);
 
 const foodListingSchema = new mongoose.Schema({
@@ -42,14 +47,8 @@ const foodListingSchema = new mongoose.Schema({
     itemName: { type: String, required: true },
     quantity: { type: String, required: true },
     expiryDate: { type: Date, required: true },
-    status: {
-        type: String,
-        required: true,
-        enum: ['Available', 'Claimed'],
-        default: 'Available'
-    },
+    status: { type: String, required: true, enum: ['Available', 'Claimed'], default: 'Available' },
 }, { timestamps: true });
-
 const FoodListing = mongoose.model('FoodListing', foodListingSchema);
 
 const donationRequestSchema = new mongoose.Schema({
@@ -59,227 +58,148 @@ const donationRequestSchema = new mongoose.Schema({
     contactName: { type: String, required: true },
     contactPhone: { type: String, required: true },
     notes: { type: String },
-    status: {
-        type: String,
-        required: true,
-        enum: ['Pending', 'Approved', 'Denied', 'Accepted', 'Claimed'],
-        default: 'Pending'
-    },
+    status: { type: String, required: true, enum: ['Pending', 'Approved', 'Denied', 'Accepted', 'Claimed'], default: 'Pending' },
 }, { timestamps: true });
-
 const DonationRequest = mongoose.model('DonationRequest', donationRequestSchema);
 
 
 // --- API Routes ---
 
-// ====== AUTH ROUTES ======
-
+// AUTH ROUTES
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { email, password, role, organizationName } = req.body;
-        if (!email || !password || !role || !organizationName) {
-            return res.status(400).json({ message: 'Please provide all required fields.' });
-        }
+        if (!email || !password || !role || !organizationName) return res.status(400).json({ message: 'Please provide all required fields.' });
         const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({ message: 'An account with this email already exists.' });
-        }
+        if (existingUser) return res.status(400).json({ message: 'An account with this email already exists.' });
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
         const newUser = new User({ email, password: hashedPassword, role, organizationName });
         await newUser.save();
+        io.emit('data_changed'); // Real-time update for admin/analyst
         res.status(201).json({ message: 'User registered successfully!' });
-    } catch (err) {
-        res.status(500).json({ message: 'Server error during registration.', error: err.message });
-    }
+    } catch (err) { res.status(500).json({ message: 'Server error during registration.', error: err.message }); }
 });
-
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { email, password } = req.body;
-        if (!email || !password) {
-            return res.status(400).json({ message: 'Please provide email and password.' });
-        }
+        if (!email || !password) return res.status(400).json({ message: 'Please provide email and password.' });
         const user = await User.findOne({ email });
-        if (!user) {
-            return res.status(400).json({ message: 'Invalid credentials.' });
-        }
+        if (!user) return res.status(400).json({ message: 'Invalid credentials.' });
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(400).json({ message: 'Invalid credentials.' });
-        }
-        res.status(200).json({ 
-            message: 'Login successful!',
-            user: { id: user._id, role: user.role, organizationName: user.organizationName, email: user.email }
-        });
-    } catch (err) {
-        res.status(500).json({ message: 'Server error during login.', error: err.message });
-    }
+        if (!isMatch) return res.status(400).json({ message: 'Invalid credentials.' });
+        res.status(200).json({ message: 'Login successful!', user: { id: user._id, role: user.role, organizationName: user.organizationName, email: user.email }});
+    } catch (err) { res.status(500).json({ message: 'Server error during login.', error: err.message }); }
 });
-
-// POST /api/auth/forgot-password - Simulate sending a reset link
-app.post('/api/auth/forgot-password', async (req, res) => {
-    try {
-        const { email } = req.body;
-        const user = await User.findOne({ email });
-        if (!user) {
-            return res.status(404).json({ message: "No user found with that email address." });
-        }
-        // In a real app, you would generate a token, save it to the user record,
-        // and send an email with a link like /reset-password?token=YOUR_TOKEN
-        console.log(`Password reset requested for ${email}. In a real app, an email would be sent.`);
-        res.status(200).json({ message: "If an account with that email exists, a password reset link has been sent." });
-    } catch (error) {
-        res.status(500).json({ message: 'Server error.', error: error.message });
-    }
+app.post('/api/auth/forgot-password', (req, res) => {
+    console.log(`Password reset requested for: ${req.body.email}`);
+    // In a real app, you would generate a token and send an email.
+    // Here, we'll just simulate a successful response.
+    res.json({ message: `If an account with that email exists, password reset instructions have been sent.` });
 });
-
-// POST /api/auth/reset-password - Reset the user's password
 app.post('/api/auth/reset-password', async (req, res) => {
     try {
         const { email, newPassword } = req.body;
-        if (!email || !newPassword) {
-            return res.status(400).json({ message: "Email and new password are required." });
-        }
-        
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(newPassword, salt);
-
-        const updatedUser = await User.findOneAndUpdate(
-            { email: email },
-            { $set: { password: hashedPassword } },
-            { new: true }
-        );
-
-        if (!updatedUser) {
-            return res.status(404).json({ message: "User not found." });
-        }
-        
-        res.status(200).json({ message: "Password has been successfully reset. You can now log in." });
-
-    } catch (error) {
-        res.status(500).json({ message: 'Server error during password reset.', error: error.message });
-    }
+        await User.findOneAndUpdate({ email }, { password: hashedPassword });
+        res.json({ message: "Password has been successfully reset. Please log in." });
+    } catch (err) { res.status(500).json({ message: 'Error resetting password.', error: err.message }); }
 });
 
 
-// ====== DATA ROUTES ======
+// DATA ROUTES (Updated with io.emit)
 
-// GET /api/listings - Fetch all available food listings
 app.get('/api/listings', async (req, res) => {
     try {
         const listings = await FoodListing.find({ status: 'Available' }).populate('donorId', 'organizationName').sort({ createdAt: -1 });
         res.json(listings);
     } catch (err) { res.status(500).json({ message: 'Error fetching listings', error: err.message }); }
 });
-
-// GET /api/listings/donor/:donorId - Fetch listings for a specific donor
 app.get('/api/listings/donor/:donorId', async (req, res) => {
     try {
         const listings = await FoodListing.find({ donorId: req.params.donorId }).sort({ createdAt: -1 });
         res.json(listings);
     } catch (err) { res.status(500).json({ message: 'Error fetching donor listings', error: err.message }); }
 });
-
-
-// POST /api/listings - Create a new food listing
 app.post('/api/listings', async (req, res) => {
     try {
         const { donorId, itemName, quantity, expiryDate } = req.body;
         const newListing = new FoodListing({ donorId, itemName, quantity, expiryDate });
         await newListing.save();
+        io.emit('data_changed'); // <-- Emit signal
         res.status(201).json(newListing);
     } catch (err) { res.status(500).json({ message: 'Error creating listing', error: err.message }); }
 });
 
-
-// GET /api/requests/donor/:donorId - Get all requests for a donor's items
 app.get('/api/requests/donor/:donorId', async (req, res) => {
     try {
-        const requests = await DonationRequest.find({ donorId: req.params.donorId })
-            .populate('listingId', 'itemName')
-            .populate('recipientId', 'organizationName')
-            .sort({ createdAt: -1 });
+        const requests = await DonationRequest.find({ donorId: req.params.donorId }).populate('listingId', 'itemName').populate('recipientId', 'organizationName').sort({ createdAt: -1 });
         res.json(requests);
-    } catch (err) { res.status(500).json({ message: 'Error fetching requests for donor', error: err.message }); }
+    } catch (err) { res.status(500).json({ message: 'Error fetching donor requests', error: err.message }); }
 });
-
-// GET /api/requests/recipient/:recipientId - Get all requests made by a recipient
 app.get('/api/requests/recipient/:recipientId', async (req, res) => {
     try {
-        const requests = await DonationRequest.find({ recipientId: req.params.recipientId })
-            .populate('listingId', 'itemName')
-            .populate('donorId', 'organizationName')
-            .sort({ createdAt: -1 });
+        const requests = await DonationRequest.find({ recipientId: req.params.recipientId }).populate('listingId', 'itemName').populate('donorId', 'organizationName').sort({ createdAt: -1 });
         res.json(requests);
-    } catch (err) { res.status(500).json({ message: 'Error fetching requests by recipient', error: err.message }); }
+    } catch (err) { res.status(500).json({ message: 'Error fetching recipient requests', error: err.message }); }
 });
-
-
-// POST /api/requests - Create a new donation request
 app.post('/api/requests', async (req, res) => {
     try {
         const { listingId, recipientId, contactName, contactPhone, notes } = req.body;
         const listing = await FoodListing.findById(listingId);
-        if (!listing) return res.status(404).json({ message: 'Listing not found.' });
-
-        const newRequest = new DonationRequest({
-            listingId,
-            recipientId,
-            donorId: listing.donorId,
-            contactName,
-            contactPhone,
-            notes
-        });
+        if (!listing) return res.status(404).json({ message: "Listing not found" });
+        const newRequest = new DonationRequest({ listingId, recipientId, donorId: listing.donorId, contactName, contactPhone, notes });
         await newRequest.save();
+        io.emit('data_changed'); // <-- Emit signal
         res.status(201).json(newRequest);
-    } catch (err) {
-        res.status(500).json({ message: 'Error creating request', error: err.message });
-    }
+    } catch (err) { res.status(500).json({ message: 'Error creating request', error: err.message }); }
 });
-
-
-// PUT /api/requests/:id - Update a request's status
 app.put('/api/requests/:id', async (req, res) => {
     try {
         const { status } = req.body;
         const request = await DonationRequest.findByIdAndUpdate(req.params.id, { status }, { new: true });
-        
-        // If an item is claimed, update the master food listing
         if (status === 'Claimed') {
             await FoodListing.findByIdAndUpdate(request.listingId, { status: 'Claimed' });
         }
-        
+        io.emit('data_changed'); // <-- Emit signal
         res.json(request);
     } catch (err) { res.status(500).json({ message: 'Error updating request', error: err.message }); }
 });
 
-// ====== ADMIN & ANALYTICS ROUTES ======
-
-// GET /api/admin/all-data
+// ADMIN & ANALYTICS ROUTES
 app.get('/api/admin/all-data', async (req, res) => {
     try {
-        const users = await User.find().select('-password');
-        const listings = await FoodListing.find().populate('donorId', 'organizationName');
-        const requests = await DonationRequest.find().populate('listingId', 'itemName').populate('recipientId', 'organizationName');
+        const [users, listings, requests] = await Promise.all([
+            User.find().select('-password'),
+            FoodListing.find().populate('donorId', 'organizationName'),
+            DonationRequest.find().populate('listingId', 'itemName').populate('recipientId', 'organizationName')
+        ]);
         res.json({ users, listings, requests });
     } catch (err) { res.status(500).json({ message: 'Error fetching admin data', error: err.message }); }
 });
-
-// GET /api/analytics/summary
 app.get('/api/analytics/summary', async (req, res) => {
     try {
-        const totalUsers = await User.countDocuments();
-        const totalListings = await FoodListing.countDocuments();
-        const claimedListings = await FoodListing.countDocuments({ status: 'Claimed' });
-        const totalRequests = await DonationRequest.countDocuments();
+        const [totalUsers, totalListings, claimedListings, totalRequests] = await Promise.all([
+            User.countDocuments(),
+            FoodListing.countDocuments(),
+            FoodListing.countDocuments({ status: 'Claimed' }),
+            DonationRequest.countDocuments()
+        ]);
         res.json({ totalUsers, totalListings, claimedListings, totalRequests });
-    } catch (err) { res.status(500).json({ message: 'Error fetching analytics', error: err.message }); }
+    } catch (err) { res.status(500).json({ message: 'Error fetching summary', error: err.message }); }
 });
 
+// --- Socket.IO Connection Handler ---
+io.on('connection', (socket) => {
+  console.log('A user connected:', socket.id);
+  socket.on('disconnect', () => {
+    console.log('User disconnected:', socket.id);
+  });
+});
 
 // --- Server Listener ---
-app.listen(PORT, () => {
-    console.log(`Backend server is running on http://localhost:${PORT}`);
+server.listen(PORT, () => { // Use server.listen instead of app.listen
+    console.log(`Backend server is running with real-time updates on http://localhost:${PORT}`);
 });
 

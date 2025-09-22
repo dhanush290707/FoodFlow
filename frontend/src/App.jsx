@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
+import { io } from "socket.io-client"; // Import socket.io-client
 
 // --- Helper Components for Icons ---
 const UtensilsCrossed = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m16 2-2.3 2.3a3 3 0 0 0 0 4.2l1.8 1.8a3 3 0 0 0 4.2 0L22 8" /><path d="M15 15 3.3 3.3a4.2 4.2 0 0 0 0 6l7.3 7.3c.7.7 2 .7 2.8 0L15 15Z" /><path d="m2.1 2.1 6.4 6.4" /><path d="m19 5-7 7" /></svg>);
@@ -11,25 +12,22 @@ const BriefcaseIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" width
 const InfoIcon = (props) => (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>);
 
 const API_URL = 'http://localhost:5000';
+const socket = io(API_URL); // Establish socket connection
 
-// --- Modal Component ---
+// --- Modal Component (Unchanged) ---
 const Modal = ({ show, onClose, title, children }) => {
     if (!show) return null;
     return (
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal-content" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2>{title}</h2>
-                    <button onClick={onClose} className="modal-close-button">&times;</button>
-                </div>
+                <div className="modal-header"><h2>{title}</h2><button onClick={onClose} className="modal-close-button">&times;</button></div>
                 <div className="modal-body">{children}</div>
             </div>
         </div>
     );
 };
 
-
-// --- Individual Dashboard Components ---
+// --- Individual Dashboard Components (Updated with Socket.IO listeners) ---
 
 const DonorDashboard = ({ user }) => {
     const [listings, setListings] = useState([]);
@@ -45,7 +43,17 @@ const DonorDashboard = ({ user }) => {
         setRequests(requestsData);
     };
 
-    useEffect(() => { fetchData(); }, [user.id]);
+    useEffect(() => {
+        fetchData(); // Fetch initial data
+        
+        // Listen for real-time updates
+        socket.on('data_changed', fetchData);
+
+        // Cleanup listener on component unmount
+        return () => {
+            socket.off('data_changed', fetchData);
+        };
+    }, [user.id]);
 
     const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -57,7 +65,7 @@ const DonorDashboard = ({ user }) => {
             body: JSON.stringify({ ...formData, donorId: user.id }),
         });
         setFormData({ itemName: '', quantity: '', expiryDate: '' });
-        fetchData();
+        // No need to call fetchData(), socket event will handle it
     };
 
     const handleRequestUpdate = async (requestId, status) => {
@@ -66,7 +74,7 @@ const DonorDashboard = ({ user }) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status }),
         });
-        fetchData();
+        // No need to call fetchData(), socket event will handle it
     };
 
     return (
@@ -142,16 +150,19 @@ const RecipientDashboard = ({ user }) => {
         setMyRequests(requestsData);
     };
     
+    useEffect(() => {
+        fetchData();
+        socket.on('data_changed', fetchData);
+        return () => { socket.off('data_changed', fetchData); };
+    }, [user.id]);
+    
     const handleRequestUpdate = async (requestId, status) => {
         await fetch(`${API_URL}/api/requests/${requestId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status }),
         });
-        fetchData();
     };
-
-    useEffect(() => { fetchData(); }, [user.id]);
 
     const openRequestModal = (listing) => {
         setSelectedListing(listing);
@@ -165,15 +176,10 @@ const RecipientDashboard = ({ user }) => {
         await fetch(`${API_URL}/api/requests`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                listingId: selectedListing._id,
-                recipientId: user.id,
-                ...requestFormData
-            }),
+            body: JSON.stringify({ listingId: selectedListing._id, recipientId: user.id, ...requestFormData }),
         });
         setShowModal(false);
         setRequestFormData({ contactName: '', contactPhone: '', notes: '' });
-        fetchData();
     };
 
     return (
@@ -232,13 +238,16 @@ const RecipientDashboard = ({ user }) => {
 
 const AdminDashboard = () => {
     const [data, setData] = useState({ users: [], listings: [], requests: [] });
+    const fetchData = async () => {
+        const res = await fetch(`${API_URL}/api/admin/all-data`);
+        const allData = await res.json();
+        setData(allData);
+    };
+
     useEffect(() => {
-        const fetchData = async () => {
-            const res = await fetch(`${API_URL}/api/admin/all-data`);
-            const allData = await res.json();
-            setData(allData);
-        };
         fetchData();
+        socket.on('data_changed', fetchData);
+        return () => { socket.off('data_changed', fetchData); };
     }, []);
 
     return (
@@ -252,13 +261,16 @@ const AdminDashboard = () => {
 
 const AnalystDashboard = () => {
     const [summary, setSummary] = useState(null);
+    const fetchSummary = async () => {
+        const res = await fetch(`${API_URL}/api/analytics/summary`);
+        const data = await res.json();
+        setSummary(data);
+    };
+
     useEffect(() => {
-        const fetchSummary = async () => {
-            const res = await fetch(`${API_URL}/api/analytics/summary`);
-            const data = await res.json();
-            setSummary(data);
-        };
         fetchSummary();
+        socket.on('data_changed', fetchSummary);
+        return () => { socket.off('data_changed', fetchSummary); };
     }, []);
 
     if (!summary) return <p>Loading analytics...</p>;
@@ -274,7 +286,6 @@ const AnalystDashboard = () => {
 };
 
 
-// --- Authentication Page Component ---
 const AuthPage = ({ formData, setFormData, handleInputChange, handleLogin, handleSignup, errorMessage, successMessage, setSuccessMessage, setErrorMessage }) => {
     const [authView, setAuthView] = useState('login'); // 'login', 'signup', 'forgot', 'reset'
     const [resetEmail, setResetEmail] = useState('');
@@ -415,7 +426,6 @@ const AuthPage = ({ formData, setFormData, handleInputChange, handleLogin, handl
     )
 };
 
-// --- Main Dashboard Container ---
 const Dashboard = ({ loggedInUser, handleLogout }) => {
     const renderDashboardContent = () => {
         switch (loggedInUser.role) {
@@ -440,7 +450,6 @@ const Dashboard = ({ loggedInUser, handleLogout }) => {
     );
 };
 
-// --- Main App Component (State Management) ---
 function App() {
   const [loggedInUser, setLoggedInUser] = useState(null);
   const [formData, setFormData] = useState({ email: '', password: '', role: 'donor', organizationName: '' });
@@ -481,7 +490,6 @@ function App() {
       const data = await response.json();
       if (response.ok) {
         setSuccessMessage('Registration successful! Please log in.');
-        // Pre-populate email for login and clear other fields
         setFormData({ email: formData.email, password: '', organizationName: '', role: 'donor' });
       } else {
         setErrorMessage(data.message || 'Registration failed.');
