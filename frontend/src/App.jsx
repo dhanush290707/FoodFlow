@@ -63,6 +63,7 @@ const DonorDashboard = ({ user }) => {
             body: JSON.stringify({ ...formData, donorId: user.id }),
         });
         setFormData({ itemName: '', quantity: '', expiryDate: '' });
+        fetchData(); // Immediately refresh data
     };
 
     const handleRequestUpdate = async (requestId, status) => {
@@ -71,7 +72,7 @@ const DonorDashboard = ({ user }) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status }),
         });
-        fetchData(); // Manually trigger a data refresh for immediate feedback.
+        fetchData(); // Immediately refresh data
     };
 
     return (
@@ -153,6 +154,7 @@ const RecipientDashboard = ({ user }) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status }),
         });
+        fetchData(); // Immediately refresh data
     };
 
     useEffect(() => { 
@@ -181,6 +183,7 @@ const RecipientDashboard = ({ user }) => {
         });
         setShowModal(false);
         setRequestFormData({ contactName: '', contactPhone: '', notes: '' });
+        fetchData(); // Immediately refresh data
     };
 
     return (
