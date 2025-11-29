@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { UtensilsCrossed, UserIcon, LockIcon, BuildingIcon, BriefcaseIcon } from '../components/Icons';
 
 const AuthPage = () => {
@@ -120,7 +120,7 @@ const AuthPage = () => {
     };
 
     const renderAuthForm = () => {
-        switch(authView) {
+         switch(authView) {
             case 'signup':
                 return (
                      <form onSubmit={handleSignup} className="auth-form">
@@ -134,7 +134,7 @@ const AuthPage = () => {
             case 'forgot':
                  return (
                     <form onSubmit={handleForgotPassword} className="auth-form">
-                        <p className="form-description">Enter your email and we'll simulate sending instructions to reset your password.</p>
+                        <p className="form-description">Enter your email and we'll send you instructions to reset your password.</p>
                         <div className="input-group"><UserIcon className="input-icon" /><input type="email" name="email" placeholder="Email Address" value={formData.email} onChange={handleInputChange} required /></div>
                         <button type="submit" className="submit-button">Send Instructions</button>
                     </form>
@@ -162,11 +162,10 @@ const AuthPage = () => {
     }
 
     const getTitle = () => {
-        switch(authView) {
+         switch(authView) {
             case 'signup': return 'Create an account to get started.';
             case 'forgot': return 'Reset Your Password';
             case 'reset': return 'Create a New Password';
-            case 'login':
             default: return 'Welcome back! Sign in to continue.';
         }
     }
@@ -179,12 +178,9 @@ const AuthPage = () => {
                     <h1>FoodShare Connect</h1>
                     <p>{getTitle()}</p>
                 </div>
-
                 {errorMessage && <p className="error-message">{errorMessage}</p>}
                 {successMessage && <p className="success-message">{successMessage}</p>}
-                
                 {renderAuthForm()}
-
                 <div className="auth-toggle">
                     {authView === 'login' && <>Don't have an account? <button onClick={() => handleViewChange('signup')}>Sign up</button></>}
                     {authView === 'signup' && <>Already have an account? <button onClick={() => handleViewChange('login')}>Sign in</button></>}
@@ -192,8 +188,7 @@ const AuthPage = () => {
                 </div>
             </div>
         </div>
-    )
+    );
 };
 
 export default AuthPage;
-

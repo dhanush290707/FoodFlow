@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext } from '../contexts/AuthContext';
 import { UtensilsCrossed, BriefcaseIcon, InfoIcon } from '../components/Icons';
 import Modal from '../components/Modal';
-
-const API_URL = 'http://localhost:5000'; // Replace with your deployed backend URL in production
+import { io } from 'socket.io-client';
 
 const DonorDashboard = () => {
-    const { user } = useContext(AuthContext);
+    const { loggedInUser, API_URL } = useContext(AuthContext);
+    const user = loggedInUser;
     const [listings, setListings] = useState([]);
     const [requests, setRequests] = useState([]);
     const [formData, setFormData] = useState({ itemName: '', quantity: '', expiryDate: '' });
@@ -29,11 +29,16 @@ const DonorDashboard = () => {
     };
 
     useEffect(() => {
+        const socket = io(API_URL);
         fetchData();
-        // Setup Socket.IO listener if you have it
-        // socket.on('dataUpdated', fetchData);
-        // return () => socket.off('dataUpdated', fetchData);
-    }, [user]);
+        socket.on('dataUpdated', fetchData);
+        socket.on('data_changed', fetchData);
+        return () => {
+            socket.off('dataUpdated', fetchData);
+            socket.off('data_changed', fetchData);
+            socket.disconnect();
+        };
+    }, [user, API_URL]);
 
     const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -173,4 +178,3 @@ const DonorDashboard = () => {
 };
 
 export default DonorDashboard;
-

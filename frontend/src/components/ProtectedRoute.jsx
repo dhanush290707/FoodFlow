@@ -1,6 +1,6 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../contexts/AuthContext'; // Fixed: changed 'context' to 'contexts'
 
 const ProtectedRoute = ({ children }) => {
     const { loggedInUser } = useAuth();
@@ -13,4 +13,3 @@ const ProtectedRoute = ({ children }) => {
 };
 
 export default ProtectedRoute;
-

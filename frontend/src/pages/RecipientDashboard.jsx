@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { Modal } from '../components/Modal';
+import { useAuth } from '../contexts/AuthContext';
+import Modal from '../components/Modal';
 import { io } from 'socket.io-client';
 
 const RecipientDashboard = () => {
-    const { user, API_URL } = useAuth();
+    const { loggedInUser, API_URL } = useAuth();
+    const user = loggedInUser;
     const [availableListings, setAvailableListings] = useState([]);
     const [myRequests, setMyRequests] = useState([]);
     const [showModal, setShowModal] = useState(false);
+    const [showDetailsModal, setShowDetailsModal] = useState(false);
     const [selectedListing, setSelectedListing] = useState(null);
+    const [selectedRequest, setSelectedRequest] = useState(null);
     const [requestFormData, setRequestFormData] = useState({ contactName: '', contactPhone: '', notes: '' });
 
     const fetchData = async () => {
@@ -25,7 +28,7 @@ const RecipientDashboard = () => {
             console.error("Failed to fetch recipient data:", error);
         }
     };
-    
+
     const handleRequestUpdate = async (requestId, status) => {
         try {
             await fetch(`${API_URL}/api/requests/${requestId}`, {
@@ -33,18 +36,23 @@ const RecipientDashboard = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status }),
             });
-            fetchData(); // Immediately refresh data
+            fetchData();
+            if (selectedRequest?._id === requestId) {
+                setShowDetailsModal(false);
+            }
         } catch (error) {
             console.error("Failed to update request:", error);
         }
     };
 
-    useEffect(() => { 
+    useEffect(() => {
         const socket = io(API_URL);
         fetchData();
         socket.on('dataUpdated', fetchData);
+        socket.on('data_changed', fetchData);
         return () => {
             socket.off('dataUpdated', fetchData);
+            socket.off('data_changed', fetchData);
             socket.disconnect();
         };
     }, [user, API_URL]);
@@ -53,6 +61,11 @@ const RecipientDashboard = () => {
         setSelectedListing(listing);
         setShowModal(true);
     };
+
+    const openDetailsModal = (request) => {
+        setSelectedRequest(request);
+        setShowDetailsModal(true);
+    }
 
     const handleRequestInputChange = (e) => setRequestFormData({ ...requestFormData, [e.target.name]: e.target.value });
 
@@ -70,7 +83,7 @@ const RecipientDashboard = () => {
             });
             setShowModal(false);
             setRequestFormData({ contactName: '', contactPhone: '', notes: '' });
-            fetchData(); // Immediately refresh data
+            fetchData();
         } catch (error) {
             console.error("Failed to submit request:", error);
         }
@@ -78,6 +91,7 @@ const RecipientDashboard = () => {
 
     return (
         <>
+            {/* Modal for New Request */}
             <Modal show={showModal} onClose={() => setShowModal(false)} title={`Request: ${selectedListing?.itemName}`}>
                 <form onSubmit={handleRequestSubmit} className="dashboard-form">
                     <input name="contactName" value={requestFormData.contactName} onChange={handleRequestInputChange} placeholder="Your Name" required/>
@@ -86,6 +100,38 @@ const RecipientDashboard = () => {
                     <button type="submit" className="submit-button">Submit Request</button>
                 </form>
             </Modal>
+
+            {/* Modal for Request Details */}
+            <Modal show={showDetailsModal} onClose={() => setShowDetailsModal(false)} title="Request Details">
+                {selectedRequest && (
+                    <div className="request-details-modal">
+                         <h4>Item</h4>
+                        <p>{selectedRequest.listingId?.itemName || 'N/A'}</p>
+                        
+                        <h4>Donor</h4>
+                        <p>{selectedRequest.donorId?.organizationName || 'N/A'}</p>
+                        
+                        <h4>Status</h4>
+                        <p><span className={`status-badge status-${selectedRequest.status.toLowerCase()}`}>{selectedRequest.status}</span></p>
+
+                        {selectedRequest.notes && (
+                            <>
+                                <h4>My Notes</h4>
+                                <div className="notes-box">
+                                    {selectedRequest.notes}
+                                </div>
+                            </>
+                        )}
+                         <hr />
+                        <div className="modal-actions">
+                            {selectedRequest.status === 'Approved' && (
+                                <button className="action-button approve" onClick={() => handleRequestUpdate(selectedRequest._id, 'Accepted')}>Accept Pickup</button>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </Modal>
+
             <div className="dashboard-grid">
                 <div className="dashboard-card span-2">
                     <h2>Available Food Donations</h2>
@@ -126,7 +172,7 @@ const RecipientDashboard = () => {
                                         <td>{r.listingId?.itemName || 'N/A'}</td>
                                         <td><span className={`status-badge status-${r.status.toLowerCase()}`}>{r.status}</span></td>
                                         <td className="actions-cell">
-                                            {r.status === 'Approved' && <button className="action-button approve" onClick={() => handleRequestUpdate(r._id, 'Accepted')}>Accept Pickup</button>}
+                                            <button className="action-button details" onClick={() => openDetailsModal(r)}>View Details</button>
                                         </td>
                                     </tr>
                                 ))}
@@ -140,4 +186,3 @@ const RecipientDashboard = () => {
 };
 
 export default RecipientDashboard;
-

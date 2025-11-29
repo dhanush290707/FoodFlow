@@ -1,7 +1,10 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './context/AuthContext';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './contexts/AuthContext';
 import AuthPage from './pages/AuthPage';
+import LandingPage from './pages/LandingPage';
+import AboutPage from './pages/AboutPage';
+import ContactPage from './pages/ContactPage';
 import DonorDashboard from './pages/DonorDashboard';
 import RecipientDashboard from './pages/RecipientDashboard';
 import AdminDashboard from './pages/AdminDashboard';
@@ -10,49 +13,44 @@ import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 
 const AppRouter = () => {
-    const { user } = useAuth();
+    const { loggedInUser } = useAuth();
 
-    const getDashboardForRole = () => {
-        switch (user?.role) {
-            case 'donor':
-                return <DonorDashboard />;
-            case 'recipient':
-                return <RecipientDashboard />;
-            case 'admin':
-                return <AdminDashboard />;
-            case 'analyst':
-                return <AnalystDashboard />;
-            default:
-                // If role is unknown or user is null, redirect to login
-                return <Navigate to="/login" />;
+    const getDashboard = () => {
+        switch (loggedInUser?.role) {
+            case 'donor': return <DonorDashboard />;
+            case 'recipient': return <RecipientDashboard />;
+            case 'admin': return <AdminDashboard />;
+            case 'analyst': return <AnalystDashboard />;
+            default: return <Navigate to="/login" />;
         }
     };
 
     return (
-        <BrowserRouter basename="/FoodFlow">
-            <Routes>
-                <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Navigate to="/login" />} />
-                <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <AuthPage />} />
-                
-                <Route 
-                    path="/dashboard" 
-                    element={
-                        <ProtectedRoute>
-                            <Layout>
-                                {getDashboardForRole()}
-                            </Layout>
-                        </ProtectedRoute>
-                    } 
-                />
+        <Routes>
+            {/* Public Routes */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/contact" element={<ContactPage />} />
+            
+            {/* Auth Route */}
+            <Route path="/login" element={loggedInUser ? <Navigate to="/dashboard" /> : <AuthPage />} />
+            
+            {/* Protected Route */}
+            <Route 
+                path="/dashboard" 
+                element={
+                    <ProtectedRoute>
+                        <Layout>
+                            {getDashboard()}
+                        </Layout>
+                    </ProtectedRoute>
+                } 
+            />
 
-                {/* Optional: Add more specific routes if needed in the future */}
-                {/* <Route path="/profile" element={<ProtectedRoute><Layout><ProfilePage /></Layout></ProtectedRoute>} /> */}
-
-                <Route path="*" element={<Navigate to="/" />} />
-            </Routes>
-        </BrowserRouter>
+            {/* Catch-all */}
+            <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
     );
 };
 
 export default AppRouter;
-
