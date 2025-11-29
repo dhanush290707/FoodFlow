@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Modal from '../components/Modal';
+import MapComponent from '../components/MapComponent';
 import { io } from 'socket.io-client';
 
 const RecipientDashboard = () => {
@@ -8,10 +9,13 @@ const RecipientDashboard = () => {
     const user = loggedInUser;
     const [availableListings, setAvailableListings] = useState([]);
     const [myRequests, setMyRequests] = useState([]);
-    const [showModal, setShowModal] = useState(false);
+    
+    const [showRequestModal, setShowRequestModal] = useState(false);
     const [showDetailsModal, setShowDetailsModal] = useState(false);
+    
     const [selectedListing, setSelectedListing] = useState(null);
     const [selectedRequest, setSelectedRequest] = useState(null);
+    
     const [requestFormData, setRequestFormData] = useState({ contactName: '', contactPhone: '', notes: '' });
 
     const fetchData = async () => {
@@ -59,7 +63,7 @@ const RecipientDashboard = () => {
 
     const openRequestModal = (listing) => {
         setSelectedListing(listing);
-        setShowModal(true);
+        setShowRequestModal(true);
     };
 
     const openDetailsModal = (request) => {
@@ -81,7 +85,7 @@ const RecipientDashboard = () => {
                     ...requestFormData
                 }),
             });
-            setShowModal(false);
+            setShowRequestModal(false);
             setRequestFormData({ contactName: '', contactPhone: '', notes: '' });
             fetchData();
         } catch (error) {
@@ -91,8 +95,7 @@ const RecipientDashboard = () => {
 
     return (
         <>
-            {/* Modal for New Request */}
-            <Modal show={showModal} onClose={() => setShowModal(false)} title={`Request: ${selectedListing?.itemName}`}>
+            <Modal show={showRequestModal} onClose={() => setShowRequestModal(false)} title={`Request: ${selectedListing?.itemName}`}>
                 <form onSubmit={handleRequestSubmit} className="dashboard-form">
                     <input name="contactName" value={requestFormData.contactName} onChange={handleRequestInputChange} placeholder="Your Name" required/>
                     <input name="contactPhone" value={requestFormData.contactPhone} onChange={handleRequestInputChange} placeholder="Phone Number" required/>
@@ -101,25 +104,19 @@ const RecipientDashboard = () => {
                 </form>
             </Modal>
 
-            {/* Modal for Request Details */}
             <Modal show={showDetailsModal} onClose={() => setShowDetailsModal(false)} title="Request Details">
                 {selectedRequest && (
                     <div className="request-details-modal">
                          <h4>Item</h4>
                         <p>{selectedRequest.listingId?.itemName || 'N/A'}</p>
-                        
                         <h4>Donor</h4>
                         <p>{selectedRequest.donorId?.organizationName || 'N/A'}</p>
-                        
                         <h4>Status</h4>
                         <p><span className={`status-badge status-${selectedRequest.status.toLowerCase()}`}>{selectedRequest.status}</span></p>
-
                         {selectedRequest.notes && (
                             <>
                                 <h4>My Notes</h4>
-                                <div className="notes-box">
-                                    {selectedRequest.notes}
-                                </div>
+                                <div className="notes-box">{selectedRequest.notes}</div>
                             </>
                         )}
                          <hr />
@@ -133,6 +130,14 @@ const RecipientDashboard = () => {
             </Modal>
 
             <div className="dashboard-grid">
+                {/* Map Section - Spans Full Width */}
+                <div className="dashboard-card span-3">
+                    <h2 style={{ marginBottom: '1rem' }}>Donation Map</h2>
+                    <div style={{ height: '400px', width: '100%' }}>
+                         <MapComponent listings={availableListings} />
+                    </div>
+                </div>
+
                 <div className="dashboard-card span-2">
                     <h2>Available Food Donations</h2>
                     <div className="data-table">
@@ -151,7 +156,7 @@ const RecipientDashboard = () => {
                                                 {isRequested ? (
                                                     <span className="status-badge status-pending">Requested</span>
                                                 ) : (
-                                                    <button className="action-button" onClick={() => openRequestModal(l)}>Request</button>
+                                                    <button className="action-button request" onClick={() => openRequestModal(l)}>Request</button>
                                                 )}
                                             </td>
                                         </tr>

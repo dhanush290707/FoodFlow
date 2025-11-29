@@ -1,13 +1,19 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { UtensilsCrossed, UserIcon, LockIcon, BuildingIcon, BriefcaseIcon } from '../components/Icons';
 
 const AuthPage = () => {
     const { login, API_URL } = useAuth();
+    const navigate = useNavigate();
+    
+    // Local state for form data and UI
     const [authView, setAuthView] = useState('login'); // 'login', 'signup', 'forgot', 'reset'
     const [formData, setFormData] = useState({ email: '', password: '', role: 'donor', organizationName: '' });
     const [errorMessage, setErrorMessage] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
+    
+    // State for password reset flow
     const [resetEmail, setResetEmail] = useState('');
     const [resetPassword, setResetPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -40,6 +46,7 @@ const AuthPage = () => {
             const data = await response.json();
             if (response.ok) {
                 setSuccessMessage('Registration successful! Please log in.');
+                // Pre-populate email for login and clear other fields
                 setFormData({ email: signupEmail, password: '', organizationName: '', role: 'donor' });
                 handleViewChange('login');
             } else {
@@ -63,6 +70,7 @@ const AuthPage = () => {
             const data = await response.json();
             if (response.ok) {
                 login(data.user);
+                navigate('/dashboard'); // Redirect to dashboard after login
             } else {
                 setErrorMessage(data.message || 'Login failed.');
             }
@@ -185,6 +193,27 @@ const AuthPage = () => {
                     {authView === 'login' && <>Don't have an account? <button onClick={() => handleViewChange('signup')}>Sign up</button></>}
                     {authView === 'signup' && <>Already have an account? <button onClick={() => handleViewChange('login')}>Sign in</button></>}
                     {(authView === 'forgot' || authView === 'reset') && <>Remember your password? <button onClick={() => handleViewChange('login')}>Sign in</button></>}
+                </div>
+                {/* Back to Home Button */}
+                <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+                    <button 
+                        onClick={() => navigate('/')}
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#64748b',
+                            textDecoration: 'none',
+                            cursor: 'pointer',
+                            fontSize: '0.9rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '100%',
+                            gap: '0.5rem'
+                        }}
+                    >
+                        ← Back to Home
+                    </button>
                 </div>
             </div>
         </div>

@@ -1,17 +1,21 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
-import { UtensilsCrossed, BriefcaseIcon, InfoIcon } from '../components/Icons';
+import { BriefcaseIcon, InfoIcon } from '../components/Icons';
 import Modal from '../components/Modal';
+import MapComponent from '../components/MapComponent';
 import { io } from 'socket.io-client';
 
 const DonorDashboard = () => {
     const { loggedInUser, API_URL } = useContext(AuthContext);
+    // Use 'user' alias for compatibility
     const user = loggedInUser;
+
     const [listings, setListings] = useState([]);
     const [requests, setRequests] = useState([]);
-    const [formData, setFormData] = useState({ itemName: '', quantity: '', expiryDate: '' });
+    const [formData, setFormData] = useState({ itemName: '', quantity: '', expiryDate: '', address: '', lat: null, lng: null });
     const [showDetailsModal, setShowDetailsModal] = useState(false);
     const [selectedRequest, setSelectedRequest] = useState(null);
+    const [locationStatus, setLocationStatus] = useState('');
 
     const fetchData = async () => {
         if (!user) return;
@@ -42,15 +46,59 @@ const DonorDashboard = () => {
 
     const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
+    // Geolocation Logic
+    const handleGetLocation = () => {
+        if (!navigator.geolocation) {
+            setLocationStatus('Geolocation is not supported by your browser');
+        } else {
+            setLocationStatus('Locating...');
+            navigator.geolocation.getCurrentPosition((position) => {
+                setLocationStatus('Location found!');
+                setFormData(prev => ({
+                    ...prev,
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                    address: 'Current Location (Device GPS)' 
+                }));
+            }, () => {
+                setLocationStatus('Unable to retrieve your location');
+            });
+        }
+    };
+
+    // Handle click on map to set location
+    const handleMapClick = (e) => {
+        const lat = e.latLng.lat();
+        const lng = e.latLng.lng();
+        setFormData(prev => ({
+            ...prev,
+            lat: lat,
+            lng: lng,
+            address: `Pinned Location (${lat.toFixed(4)}, ${lng.toFixed(4)})` 
+        }));
+        setLocationStatus('Location pinned on map!');
+    };
+
     const handleCreateListing = async (e) => {
         e.preventDefault();
+        const payload = {
+            ...formData,
+            donorId: user.id,
+            location: {
+                address: formData.address,
+                lat: formData.lat || 40.7128, // Default fallback
+                lng: formData.lng || -74.0060
+            }
+        };
+
         await fetch(`${API_URL}/api/listings`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...formData, donorId: user.id }),
+            body: JSON.stringify(payload),
         });
-        setFormData({ itemName: '', quantity: '', expiryDate: '' });
-        fetchData(); // Refresh data
+        setFormData({ itemName: '', quantity: '', expiryDate: '', address: '', lat: null, lng: null });
+        setLocationStatus('');
+        // Data refresh handled by socket
     };
 
     const handleRequestUpdate = async (requestId, status) => {
@@ -59,10 +107,11 @@ const DonorDashboard = () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status }),
         });
-        fetchData(); // Refresh data
+        
         if(selectedRequest?._id === requestId) {
             setShowDetailsModal(false);
         }
+        // Data refresh handled by socket
     };
 
     const openDetailsModal = (request) => {
@@ -103,6 +152,9 @@ const DonorDashboard = () => {
                              {selectedRequest.status === 'Approved' && (
                                 <button className="action-button claim" onClick={() => handleRequestUpdate(selectedRequest._id, 'Claimed')}>Mark as Claimed</button>
                             )}
+                             {(selectedRequest.status === 'Denied' || selectedRequest.status === 'Claimed') && (
+                                 <span className={`status-badge status-${selectedRequest.status.toLowerCase()}`}>{selectedRequest.status}</span>
+                             )}
                         </div>
                     </div>
                 )}
@@ -115,6 +167,17 @@ const DonorDashboard = () => {
                         <input name="itemName" value={formData.itemName} onChange={handleInputChange} placeholder="Item Name (e.g., Bread Loaves)" required />
                         <input name="quantity" value={formData.quantity} onChange={handleInputChange} placeholder="Quantity (e.g., 20)" required />
                         <input name="expiryDate" value={formData.expiryDate} onChange={handleInputChange} type="date" required />
+                        
+                        <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                            <input name="address" value={formData.address} onChange={handleInputChange} placeholder="Address (or click on Map)" style={{flexGrow: 1}} />
+                            <button type="button" onClick={handleGetLocation} className="action-button" style={{whiteSpace: 'nowrap'}}>📍 Locate Me</button>
+                        </div>
+                        {locationStatus && <p style={{fontSize: '0.8rem', color: '#16a34a', margin: 0}}>{locationStatus}</p>}
+                        
+                        <p style={{fontSize: '0.8rem', color: '#64748b', marginTop: '-5px', marginBottom: '5px'}}>
+                            * Click on the map to set exact location
+                        </p>
+
                         <button type="submit" className="submit-button">Add Listing</button>
                     </form>
                 </div>
@@ -142,6 +205,18 @@ const DonorDashboard = () => {
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+
+                 {/* Map Section - Spans Full Width */}
+                 <div className="dashboard-card span-3">
+                    <h2 style={{ marginBottom: '1rem' }}>Set Donation Location</h2>
+                    <div style={{ height: '400px', width: '100%' }}>
+                         <MapComponent 
+                            listings={listings} 
+                            onMapClick={handleMapClick} 
+                            newListingLocation={formData.lat ? { lat: formData.lat, lng: formData.lng } : null}
+                         />
                     </div>
                 </div>
 

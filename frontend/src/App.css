@@ -15,19 +15,15 @@
     --font-family: 'Inter', sans-serif;
 }
 
-html, body, #root {
-    height: 100%;
-    width: 100%;
+body, html, #root {
     margin: 0;
     padding: 0;
-}
-
-body {
     font-family: var(--font-family);
     background-color: var(--background-color);
     color: var(--text-color);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    height: 100%;
 }
 
 /* --- Authentication Page Styles --- */
@@ -364,6 +360,17 @@ body {
 .action-button.deny { background-color: var(--danger-color); }
 .action-button.claim { background-color: #6b7280; } /* Gray */
 .action-button.details { background-color: #64748b; }
+
+/* Request button: blue background with white text */
+.action-button.request {
+    background-color: #3b82f6; /* blue-500 */
+    color: #ffffff;
+    border: none;
+}
+.action-button.request:hover {
+    background-color: #2563eb; /* blue-600 */
+    opacity: 0.95;
+}
 
 .contact-info {
     display: flex;
@@ -754,6 +761,23 @@ body {
     color: white;
 }
 
+.logout-btn {
+    background: none;
+    border: 1px solid var(--border-color);
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-icon {
+    width: 16px;
+    height: 16px;
+}
+
+/* --- Landing Page Styles --- */
 .hero-section {
     position: relative;
     height: 600px; /* Adjust height as needed */
